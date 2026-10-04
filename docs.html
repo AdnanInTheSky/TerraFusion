@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TerraFusion — API Docs</title>
+
+  <!-- =====================================================================
+       Swagger UI — loaded entirely from the official CDN.
+       No Node.js, no build step, no local dependencies.
+       Spec file: openapi.yaml (same directory as this page)
+  ====================================================================== -->
+  <link rel="stylesheet"
+        href="https://unpkg.com/swagger-ui-dist@5.17.14/swagger-ui.css" />
+
+  <style>
+    /* -----------------------------------------------------------------------
+       Minimal branding overlay — does not touch Swagger UI internals
+    ----------------------------------------------------------------------- */
+    :root {
+      --tf-bg:        #0b0f1a;
+      --tf-surface:   #111827;
+      --tf-accent:    #f97316;   /* TerraFusion orange */
+      --tf-text:      #e2e8f0;
+      --tf-muted:     #64748b;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--tf-bg);
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      color: var(--tf-text);
+    }
+
+    /* ── Top banner ────────────────────────────────────────────────────── */
+    #tf-banner {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 28px;
+      background: var(--tf-surface);
+      border-bottom: 2px solid var(--tf-accent);
+    }
+
+    #tf-banner svg {
+      flex-shrink: 0;
+    }
+
+    #tf-banner .tf-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: var(--tf-accent);
+    }
+
+    #tf-banner .tf-sub {
+      font-size: 0.78rem;
+      color: var(--tf-muted);
+      margin-top: 2px;
+    }
+
+    #tf-banner .tf-links {
+      margin-left: auto;
+      display: flex;
+      gap: 16px;
+      font-size: 0.8rem;
+    }
+
+    #tf-banner .tf-links a {
+      color: var(--tf-muted);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    #tf-banner .tf-links a:hover { color: var(--tf-accent); }
+
+    /* ── Swagger UI host container ─────────────────────────────────────── */
+    #swagger-ui {
+      /* Swagger UI renders its own white background — let it breathe */
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    /* Keep topbar hidden (we have our own banner) */
+    .swagger-ui .topbar { display: none !important; }
+
+    /* Loading indicator */
+    #tf-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      min-height: 240px;
+      color: var(--tf-muted);
+      font-size: 0.9rem;
+    }
+
+    #tf-loading .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid #1e293b;
+      border-top-color: var(--tf-accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Error state */
+    #tf-error {
+      display: none;
+      margin: 32px auto;
+      max-width: 600px;
+      background: #1e1010;
+      border: 1px solid #7f1d1d;
+      border-radius: 8px;
+      padding: 20px 24px;
+      color: #fca5a5;
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+    #tf-error strong { color: #f87171; }
+  </style>
+</head>
+<body>
+
+  <!-- ── Banner ──────────────────────────────────────────────────────────── -->
+  <header id="tf-banner">
+    <!-- Flame icon (inline SVG — zero external image dependency) -->
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="none"
+         stroke="var(--tf-accent)" stroke-width="1.8"
+         stroke-linecap="round" stroke-linejoin="round"
+         aria-hidden="true">
+      <path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 002.5 3z"/>
+    </svg>
+
+    <div>
+      <div class="tf-title">TerraFusion · FlameAtlas — API &amp; Data Docs</div>
+      <div class="tf-sub">NASA Space Apps 2026 · Flame in Freefall · OpenAPI 3.0</div>
+    </div>
+
+    <nav class="tf-links" aria-label="External links">
+      <a href="https://github.com/AdnanInTheSky/TerraFusion"
+         target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+      <a href="openapi.yaml" target="_blank" rel="noopener noreferrer">
+        openapi.yaml ↗
+      </a>
+      <a href="index.html">← App</a>
+    </nav>
+  </header>
+
+  <!-- ── Loading state (visible until Swagger UI is ready) ───────────────── -->
+  <div id="tf-loading" role="status" aria-live="polite">
+    <div class="spinner" aria-hidden="true"></div>
+    <span>Loading Swagger UI…</span>
+  </div>
+
+  <!-- ── Error state (shown if spec fetch fails) ─────────────────────────── -->
+  <div id="tf-error" role="alert" aria-live="assertive">
+    <strong>⚠ Could not load the API specification.</strong><br /><br />
+    <code>openapi.yaml</code> must be served from the same origin as this
+    page. Open the project with a local static server:<br /><br />
+    <code>python -m http.server 8000</code>&nbsp;&nbsp;then visit
+    <code>http://localhost:8000/docs.html</code><br /><br />
+    Opening <code>docs.html</code> directly as a <code>file://</code> URL
+    will trigger a CORS block when Swagger UI tries to fetch the YAML.
+  </div>
+
+  <!-- ── Swagger UI mount point ──────────────────────────────────────────── -->
+  <div id="swagger-ui"></div>
+
+  <!-- =====================================================================
+       Swagger UI bundle — CDN, pinned to a specific minor version for
+       reproducibility. No installation required.
+  ====================================================================== -->
+  <script src="https://unpkg.com/swagger-ui-dist@5.17.14/swagger-ui-bundle.js">
+  </script>
+  <script src="https://unpkg.com/swagger-ui-dist@5.17.14/swagger-ui-standalone-preset.js">
+  </script>
+
+  <script>
+    (function () {
+      'use strict';
+
+      // Hide loading indicator once the DOM script runs
+      function hideLoading () {
+        var el = document.getElementById('tf-loading');
+        if (el) el.style.display = 'none';
+      }
+
+      function showError () {
+        hideLoading();
+        var el = document.getElementById('tf-error');
+        if (el) el.style.display = 'block';
+      }
+
+      // Guard: make sure the CDN script loaded correctly
+      if (typeof SwaggerUIBundle === 'undefined') {
+        showError();
+        return;
+      }
+
+      // Resolve the spec URL relative to this HTML file so it works
+      // regardless of the sub-path the user serves it from.
+      var specUrl = new URL('openapi.yaml', window.location.href).href;
+
+      try {
+        var ui = SwaggerUIBundle({
+          url: specUrl,
+
+          dom_id: '#swagger-ui',
+
+          // ── Display options ──────────────────────────────────────────
+          deepLinking: true,         // each operation gets a shareable URL hash
+          displayOperationId: false,
+          displayRequestDuration: true,
+          defaultModelsExpandDepth: 2,
+          defaultModelExpandDepth: 3,
+          docExpansion: 'list',      // 'list' shows all tags, collapses ops
+          filter: true,              // search bar across all operations
+          showExtensions: false,
+          showCommonExtensions: false,
+          tryItOutEnabled: false,    // disable "Try it out" for static spec
+
+          // ── Presets & plugins ────────────────────────────────────────
+          presets: [
+            SwaggerUIBundle.presets.apis,
+            SwaggerUIStandalonePreset
+          ],
+          plugins: [
+            SwaggerUIBundle.plugins.DownloadUrl
+          ],
+          layout: 'StandaloneLayout',
+
+          // ── Lifecycle hooks ──────────────────────────────────────────
+          onComplete: function () {
+            hideLoading();
+          },
+
+          // Called when the spec cannot be fetched or parsed
+          onFailure: function (err) {
+            console.error('[TerraFusion docs] Swagger UI load failure:', err);
+            showError();
+          },
+
+          // Validate the spec on load and log warnings to the console
+          validatorUrl: null  // disable remote validator (avoids CORS noise)
+        });
+
+        // Expose for debugging in the browser console
+        window.__swaggerUi = ui;
+
+      } catch (err) {
+        console.error('[TerraFusion docs] SwaggerUIBundle threw:', err);
+        showError();
+      }
+    })();
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,1005 @@
+openapi: 3.0.3
+
+info:
+  title: TerraFusion (FlameAtlas) — API & Data Reference
+  version: "1.0.0"
+  description: |
+    **TerraFusion / FlameAtlas** is a fully static frontend built for the
+    NASA Space Apps 2026 *Flame in Freefall* challenge.
+
+    This document describes **two categories of data sources** consumed
+    client-side by the application:
+
+    1. **External API** — NASA's live DONKI space-weather feed, called
+       directly from the browser via `js-api/donki-api.js`.
+    2. **Static JSON assets** — Local data files in the `data/` directory
+       that are fetched with the browser `fetch()` API at runtime.
+
+    > **Note:** There is no backend server. All requests originate in the
+    > browser. The base URL for the NASA DONKI API and the base URL for
+    > local assets differ; see the `servers` section for details.
+  contact:
+    name: TerraFusion / FlameAtlas
+    url: https://github.com/AdnanInTheSky/TerraFusion
+  license:
+    name: MIT
+
+# ---------------------------------------------------------------------------
+# Servers
+# Two logical origins are documented here:
+#   1. NASA DONKI API (external, live)
+#   2. Local static assets served from the project root
+# ---------------------------------------------------------------------------
+servers:
+  - url: https://api.nasa.gov
+    description: NASA DONKI live space-weather API (external)
+  - url: .
+    description: |
+      Local static file server — serve the project root with any static
+      HTTP server (e.g. `python -m http.server 8000` or `npx serve .`).
+
+# ---------------------------------------------------------------------------
+# Tags
+# ---------------------------------------------------------------------------
+tags:
+  - name: NASA DONKI
+    description: |
+      Live solar-flare and space-weather data from the NASA Community
+      Coordinated Modeling Center (CCMC) DONKI database.
+      Called in `js-api/donki-api.js` → `fetchDonkiFlares()`.
+  - name: Static Data Assets
+    description: |
+      Read-only JSON files in the `data/` directory.  Each file is loaded
+      with a plain `fetch('./data/<file>.json')` call by the relevant page.
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+paths:
+
+  # -------------------------------------------------------------------------
+  # NASA DONKI — Solar Flare List
+  # -------------------------------------------------------------------------
+  /DONKI/FLR:
+    get:
+      tags: [NASA DONKI]
+      summary: Get solar flare events
+      description: |
+        Returns an array of solar-flare records from the NASA DONKI database
+        for the specified date range.
+
+        **Used by:** `js-api/donki-api.js` → `fetchDonkiFlares(days, apiKey)`
+
+        The client sets a **2.5-second abort timeout**. On failure it falls
+        back to `data/donki-snapshot.json` and then to the embedded in-memory
+        snapshot inside `donki-api.js`.
+      operationId: getSolarFlares
+      parameters:
+        - name: startDate
+          in: query
+          required: true
+          description: Start of the date range (YYYY-MM-DD, UTC).
+          example: "2026-08-27"
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          required: true
+          description: End of the date range (YYYY-MM-DD, UTC).
+          example: "2026-09-26"
+          schema:
+            type: string
+            format: date
+        - name: api_key
+          in: query
+          required: true
+          description: |
+            NASA API key. Use `DEMO_KEY` for unauthenticated testing
+            (rate-limited). Register at https://api.nasa.gov for a free key.
+          example: DEMO_KEY
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Array of solar-flare event objects.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DonkiFlare"
+              example:
+                - flrID: "2026-09-12T19:08:00-FLR-001"
+                  classType: "X1.1"
+                  beginTime: "2026-09-12T19:08Z"
+                  peakTime: "2026-09-12T19:22Z"
+                  endTime: "2026-09-12T19:35Z"
+                  sourceLocation: "S12W35"
+                  activeRegionNum: 14532
+                  linkedEvents:
+                    - "2026-09-12T20:00:00-CME-001"
+                    - "2026-09-12T20:30:00-SEP-001"
+                  link: "https://kauai.ccmc.gsfc.nasa.gov/DONKI/"
+        "429":
+          description: Rate limit exceeded (DEMO_KEY throttle). Use a registered API key.
+
+  # -------------------------------------------------------------------------
+  # Static asset — donki-snapshot.json
+  # -------------------------------------------------------------------------
+  /data/donki-snapshot.json:
+    get:
+      tags: [Static Data Assets]
+      summary: Offline DONKI flare snapshot
+      description: |
+        Verified offline backup of real NASA DONKI solar-flare records.
+        Loaded by `fetchDonkiFlares()` as the second-level fallback when the
+        live NASA API is unreachable. Schema is identical to the DONKI API
+        response.
+
+        **Used by:** `js-api/donki-api.js`
+      operationId: getDonkiSnapshot
+      responses:
+        "200":
+          description: Array of DONKI flare objects (same schema as live API).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DonkiFlare"
+
+  # -------------------------------------------------------------------------
+  # Static asset — missions.json
+  # -------------------------------------------------------------------------
+  /data/missions.json:
+    get:
+      tags: [Static Data Assets]
+      summary: Mission phase definitions
+      description: |
+        Defines each space-mission phase with its environmental parameters
+        (gravity, O₂ %, pressure, comms delay).
+
+        **Used by:** `js/shared.js`, `index.html` (Mission Overview page)
+      operationId: getMissions
+      responses:
+        "200":
+          description: Array of mission phase objects.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MissionPhase"
+              example:
+                - id: iss
+                  name: ISS
+                  subtitle: Low Earth orbit
+                  gravity: 0
+                  o2: 21
+                  pressure: 14.7
+                  commDelay: "< 1 s"
+                  note: "Sea-level air, reference baseline for most experiments."
+
+  # -------------------------------------------------------------------------
+  # Static asset — materials.json
+  # -------------------------------------------------------------------------
+  /data/materials.json:
+    get:
+      tags: [Static Data Assets]
+      summary: Cabin material flammability data
+      description: |
+        Spacecraft cabin materials with their baseline flammability score
+        and Limiting Oxygen Index (LOI) values sourced from NASA PSI
+        BASS / FLEX experiments.
+
+        **Used by:** `material-ranker.html` (Material Risk Ranker page)
+      operationId: getMaterials
+      responses:
+        "200":
+          description: Array of material objects.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Material"
+              example:
+                - id: nomex
+                  name: Nomex HT90-40
+                  type: Fabric
+                  base: 0.34
+                  loi: 28
+                  source: PSI-26 BASS
+
+  # -------------------------------------------------------------------------
+  # Static asset — gravity.json
+  # -------------------------------------------------------------------------
+  /data/gravity.json:
+    get:
+      tags: [Static Data Assets]
+      summary: Gaussian Process gravity regression parameters
+      description: |
+        Configuration for the Gaussian Process (GP) flame-spread regression
+        curve shown on the Gravity Gap-Filler page. Includes gravity presets
+        and number of interpolation steps.
+
+        **Used by:** `gravity-gap.html`
+      operationId: getGravityConfig
+      responses:
+        "200":
+          description: GP regression configuration object.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GravityConfig"
+
+  # -------------------------------------------------------------------------
+  # Static asset — radar.json
+  # -------------------------------------------------------------------------
+  /data/radar.json:
+    get:
+      tags: [Static Data Assets]
+      summary: Flame radar classifier axes and fuel/diluent lists
+      description: |
+        Defines the axes (O₂ % and pressure in atm), fuel types, and diluent
+        types for the 2-D flame-regime classifier (hot / cool / extinct) on
+        the Invisible Flame Radar page.
+
+        **Used by:** `flame-radar.html`
+      operationId: getRadarConfig
+      responses:
+        "200":
+          description: Radar configuration object.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RadarConfig"
+
+  # -------------------------------------------------------------------------
+  # Static asset — gaps.json
+  # -------------------------------------------------------------------------
+  /data/gaps.json:
+    get:
+      tags: [Static Data Assets]
+      summary: Research gap heatmap axes and prioritised test recommendations
+      description: |
+        Provides the O₂ and gravity axes for the Research Gap Map heatmap,
+        human-readable labels for each gravity level, and a ranked list of
+        recommended next NASA combustion experiments with expected information
+        gain scores.
+
+        **Used by:** `gap-map.html`
+      operationId: getGaps
+      responses:
+        "200":
+          description: Gap map configuration object.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GapConfig"
+
+  # -------------------------------------------------------------------------
+  # Static asset — firegpt.json
+  # -------------------------------------------------------------------------
+  /data/firegpt.json:
+    get:
+      tags: [Static Data Assets]
+      summary: FireGPT knowledge base and quiz questions
+      description: |
+        Contains the keyword-keyed retrieval knowledge base (`kb`) used by
+        the FireGPT conversational assistant, and a set of multiple-choice
+        quiz questions with answers, explanations, and NASA citations.
+
+        **Used by:** `fire-gpt.html`
+      operationId: getFireGptData
+      responses:
+        "200":
+          description: FireGPT data object with `kb` and `quiz` arrays.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FireGptData"
+
+  # -------------------------------------------------------------------------
+  # Static asset — game.json
+  # -------------------------------------------------------------------------
+  /data/game.json:
+    get:
+      tags: [Static Data Assets]
+      summary: Gamification levels, badges, and missions
+      description: |
+        Defines XP level thresholds, earnable badge definitions (with
+        section, icon, and NASA source references), cross-section mission
+        chains, and trivia questions used by the global gamification layer.
+
+        **Used by:** `js/shared.js`, `fire-gpt.html`
+      operationId: getGameData
+      responses:
+        "200":
+          description: Game data object.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameData"
+
+  # -------------------------------------------------------------------------
+  # Static asset — lab.json
+  # -------------------------------------------------------------------------
+  /data/lab.json:
+    get:
+      tags: [Static Data Assets]
+      summary: Flame Lab 3D — places, materials, and guided lessons
+      description: |
+        Configuration for the Flame Lab 3D simulator. Provides gravity/O₂
+        environment presets (`places`), combustible material properties
+        (`labMaterials`), a mapping of mission phase → lab place, and the
+        ordered sequence of guided lesson stages (`lessons`).
+
+        **Used by:** `flame-lab.html`
+      operationId: getLabData
+      responses:
+        "200":
+          description: Lab configuration object.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LabData"
+
+  # -------------------------------------------------------------------------
+  # Static asset — earth-presets.json
+  # -------------------------------------------------------------------------
+  /data/earth-presets.json:
+    get:
+      tags: [Static Data Assets]
+      summary: Solar storm scenario presets and reference cities
+      description: |
+        Named solar-storm scenarios (e.g., Quiet day, Gannon storm, Carrington
+        1859) with flare level, CME speed, Bz, and density values; plus a
+        list of reference cities with latitudes used to determine aurora
+        visibility.
+
+        **Used by:** `earth-impact.html`
+      operationId: getEarthPresets
+      responses:
+        "200":
+          description: Earth preset configuration object.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EarthPresetsData"
+
+  # -------------------------------------------------------------------------
+  # Static asset — sources.json
+  # -------------------------------------------------------------------------
+  /data/sources.json:
+    get:
+      tags: [Static Data Assets]
+      summary: NASA PSI and NTRS data source references
+      description: |
+        List of NASA open-science data sources cited throughout the
+        application (PSI experiments, NTRS publications, DONKI). Rendered
+        as 3-D collectible science cards on the Sources page.
+
+        **Used by:** `sources.html`
+      operationId: getSources
+      responses:
+        "200":
+          description: Array of source reference objects.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SourceRef"
+
+# ---------------------------------------------------------------------------
+# Component Schemas
+# ---------------------------------------------------------------------------
+components:
+  schemas:
+
+    # -----------------------------------------------------------------------
+    # NASA DONKI raw flare (as returned by the API / stored in snapshot)
+    # -----------------------------------------------------------------------
+    DonkiFlare:
+      type: object
+      description: |
+        Raw solar-flare record as returned by the NASA DONKI FLR endpoint
+        and stored verbatim in `data/donki-snapshot.json`.
+        The client-side `normalizeFlare()` function in `donki-api.js`
+        converts this into a richer `NormalizedFlare` object.
+      required: [flrID, classType, beginTime]
+      properties:
+        flrID:
+          type: string
+          description: Unique flare event identifier (ISO timestamp + sequence suffix).
+          example: "2026-09-12T19:08:00-FLR-001"
+        classType:
+          type: string
+          description: GOES X-ray classification (e.g. C1.0, M2.2, X1.1).
+          example: "X1.1"
+        beginTime:
+          type: string
+          format: date-time
+          description: UTC time the flare began.
+          example: "2026-09-12T19:08Z"
+        peakTime:
+          type: string
+          format: date-time
+          description: UTC time of peak X-ray flux.
+          example: "2026-09-12T19:22Z"
+        endTime:
+          type: string
+          format: date-time
+          nullable: true
+          description: UTC time the flare ended (null if still ongoing).
+          example: "2026-09-12T19:35Z"
+        sourceLocation:
+          type: string
+          description: |
+            Heliographic coordinates of the source active region
+            in the format `<N|S><lat><E|W><lon>` (e.g. `S12W35`).
+          example: "S12W35"
+        activeRegionNum:
+          type: integer
+          description: NOAA active solar region number.
+          example: 14532
+        linkedEvents:
+          type: array
+          nullable: true
+          description: |
+            Array of associated event IDs (CME, SEP). `null` when no
+            linked events exist.
+          items:
+            type: string
+          example: ["2026-09-12T20:00:00-CME-001", "2026-09-12T20:30:00-SEP-001"]
+        link:
+          type: string
+          format: uri
+          description: URL to the DONKI event detail page.
+          example: "https://kauai.ccmc.gsfc.nasa.gov/DONKI/"
+
+    # -----------------------------------------------------------------------
+    # Mission phase
+    # -----------------------------------------------------------------------
+    MissionPhase:
+      type: object
+      description: Environmental conditions for a specific space mission phase.
+      required: [id, name, gravity, o2, pressure]
+      properties:
+        id:
+          type: string
+          enum: [iss, gateway, moon, transit, mars]
+          description: Unique phase identifier used throughout the codebase.
+          example: "moon"
+        name:
+          type: string
+          description: Display name of the mission phase.
+          example: "Moon"
+        subtitle:
+          type: string
+          description: Short location descriptor.
+          example: "Artemis surface"
+        gravity:
+          type: number
+          format: float
+          description: Gravitational acceleration as a fraction of 1g Earth gravity.
+          example: 0.16
+        o2:
+          type: number
+          format: float
+          description: Oxygen percentage of the cabin atmosphere.
+          example: 34
+        pressure:
+          type: number
+          format: float
+          description: Total cabin pressure in psi.
+          example: 8.2
+        commDelay:
+          type: string
+          description: One-way communication delay to Earth.
+          example: "1.3 s"
+        note:
+          type: string
+          description: Human-readable description of the atmosphere and hazards.
+
+    # -----------------------------------------------------------------------
+    # Cabin material
+    # -----------------------------------------------------------------------
+    Material:
+      type: object
+      description: Spacecraft cabin material with flammability properties.
+      required: [id, name, type, base, loi, source]
+      properties:
+        id:
+          type: string
+          description: Unique material identifier slug.
+          example: "nomex"
+        name:
+          type: string
+          description: Full material name.
+          example: "Nomex HT90-40"
+        type:
+          type: string
+          description: Material category (Fabric, Thermoplastic, Elastomer, etc.).
+          example: "Fabric"
+        base:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: |
+            Baseline flammability score (0 = essentially non-flammable,
+            1 = highly flammable) at ISS standard conditions (21% O₂ / 14.7 psi).
+          example: 0.34
+        loi:
+          type: integer
+          description: |
+            Limiting Oxygen Index — minimum O₂ % needed to sustain combustion
+            in a downward-burning configuration. Lower LOI = more flammable.
+          example: 28
+        source:
+          type: string
+          description: NASA PSI experiment or publication that provided the data.
+          example: "PSI-26 BASS"
+
+    # -----------------------------------------------------------------------
+    # Gravity GP config
+    # -----------------------------------------------------------------------
+    GravityConfig:
+      type: object
+      required: [presets, gravitySteps, description]
+      properties:
+        presets:
+          type: array
+          description: Named gravity-level presets shown as quick-select buttons.
+          items:
+            type: object
+            required: [label, g]
+            properties:
+              label:
+                type: string
+                example: "Moon"
+              g:
+                type: number
+                format: float
+                description: Gravity as a fraction of Earth 1g.
+                example: 0.16
+        gravitySteps:
+          type: integer
+          description: Number of interpolation points across the 0g–1g axis.
+          example: 50
+        description:
+          type: string
+          description: Human-readable explanation of the GP regression model.
+
+    # -----------------------------------------------------------------------
+    # Radar config
+    # -----------------------------------------------------------------------
+    RadarConfig:
+      type: object
+      required: [fuels, diluents, o2Axis, atmAxis]
+      properties:
+        fuels:
+          type: array
+          items:
+            type: object
+            required: [id, name, source]
+            properties:
+              id:
+                type: string
+                example: "heptane"
+              name:
+                type: string
+                example: "n-Heptane"
+              source:
+                type: string
+                description: NASA PSI experiment reference.
+                example: "PSI-69 FLEX"
+        diluents:
+          type: array
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id:
+                type: string
+                example: "co2"
+              name:
+                type: string
+                example: "CO₂ added"
+        o2Axis:
+          type: array
+          description: O₂ percentage values for the classifier grid columns.
+          items:
+            type: integer
+          example: [10, 13, 16, 19, 22, 25, 28, 31, 34, 37, 40]
+        atmAxis:
+          type: array
+          description: Pressure values (atm) for the classifier grid rows.
+          items:
+            type: number
+            format: float
+          example: [3.0, 2.5, 2.0, 1.5, 1.0, 0.75, 0.5]
+
+    # -----------------------------------------------------------------------
+    # Gap map config
+    # -----------------------------------------------------------------------
+    GapConfig:
+      type: object
+      required: [gapO2, gapG, gLabels, testNext]
+      properties:
+        gapO2:
+          type: array
+          description: O₂ % axis values for the research gap heatmap.
+          items:
+            type: integer
+          example: [15, 18, 21, 24, 27, 30, 34, 38]
+        gapG:
+          type: array
+          description: Gravity axis values (fraction of 1g) for the heatmap.
+          items:
+            type: number
+            format: float
+          example: [1, 0.75, 0.5, 0.38, 0.16, 0.05, 0]
+        gLabels:
+          type: object
+          description: Human-readable labels keyed by gravity value string.
+          additionalProperties:
+            type: string
+          example:
+            "0": "Orbit 0g"
+            "0.16": "Moon .16g"
+            "0.38": "Mars .38g"
+            "1": "Earth 1g"
+        testNext:
+          type: array
+          description: Ranked list of recommended next NASA combustion experiments.
+          items:
+            type: object
+            required: [cond, why, gain]
+            properties:
+              cond:
+                type: string
+                description: Experimental condition shorthand.
+                example: "34% O₂ @ 8.2 psi @ 0.16g"
+              why:
+                type: string
+                description: Scientific rationale for prioritising this test.
+              gain:
+                type: number
+                format: float
+                minimum: 0
+                maximum: 1
+                description: Expected information gain score (0–1).
+                example: 0.92
+
+    # -----------------------------------------------------------------------
+    # FireGPT data
+    # -----------------------------------------------------------------------
+    FireGptData:
+      type: object
+      required: [kb]
+      properties:
+        kb:
+          type: array
+          description: |
+            Knowledge base entries. Each entry is matched when any of its
+            `keys` appear in the user's question (case-insensitive).
+          items:
+            type: object
+            required: [keys, answer, citations, confidence]
+            properties:
+              keys:
+                type: array
+                items:
+                  type: string
+                description: Trigger keywords for this answer.
+                example: ["cool flame", "invisible", "cool"]
+              answer:
+                type: string
+                description: Plain-text answer shown to the user.
+              citations:
+                type: array
+                items:
+                  type: string
+                description: NASA PSI / NTRS references supporting the answer.
+                example: ["PSI-69 FLEX", "PSI-117"]
+              confidence:
+                type: number
+                format: float
+                minimum: 0
+                maximum: 1
+                description: Model confidence score (0–1) for this answer.
+                example: 0.84
+        quiz:
+          type: array
+          description: Multiple-choice quiz questions for the FireGPT Quiz mini-game.
+          items:
+            type: object
+            required: [q, options, answer]
+            properties:
+              q:
+                type: string
+                description: Question text.
+              options:
+                type: array
+                items:
+                  type: string
+                description: Answer choices (4 options).
+              answer:
+                type: integer
+                description: Zero-based index of the correct option.
+              explanation:
+                type: string
+                description: Explanation shown after answering.
+              source:
+                type: string
+                description: NASA citation for the correct answer.
+
+    # -----------------------------------------------------------------------
+    # Game data
+    # -----------------------------------------------------------------------
+    GameData:
+      type: object
+      required: [levels, badges, missions]
+      properties:
+        levels:
+          type: array
+          description: XP thresholds and titles for each player level.
+          items:
+            type: object
+            required: [level, title, xp]
+            properties:
+              level:
+                type: integer
+                example: 3
+              title:
+                type: string
+                example: "Flame Tracker"
+              xp:
+                type: integer
+                description: Minimum XP required to reach this level.
+                example: 150
+        badges:
+          type: array
+          description: Earnable achievement badges.
+          items:
+            type: object
+            required: [id, name, desc, section, icon]
+            properties:
+              id:
+                type: string
+                example: "first-light"
+              name:
+                type: string
+                example: "First Light"
+              desc:
+                type: string
+                description: How to earn this badge.
+              section:
+                type: string
+                description: Dashboard section where the badge can be earned.
+                example: "lab"
+              icon:
+                type: string
+                description: Lucide icon name to display.
+                example: "flame"
+              source:
+                type: string
+                description: NASA data source linked to this badge.
+                example: "PSI-26"
+        missions:
+          type: array
+          description: Multi-badge mission chains with completion requirements.
+          items:
+            type: object
+            required: [id, title, desc, need]
+            properties:
+              id:
+                type: string
+                example: "m1"
+              title:
+                type: string
+                example: "Liftoff"
+              desc:
+                type: string
+              need:
+                type: integer
+                description: Number of badges required to complete this mission.
+                example: 3
+
+    # -----------------------------------------------------------------------
+    # Lab data
+    # -----------------------------------------------------------------------
+    LabData:
+      type: object
+      required: [places, labMaterials, lessons]
+      properties:
+        places:
+          type: array
+          description: Simulation environments (gravity / O₂ settings).
+          items:
+            type: object
+            required: [id, name, gravity, o2]
+            properties:
+              id:
+                type: string
+                example: "orbit"
+              name:
+                type: string
+                example: "Space station"
+              gravity:
+                type: number
+                format: float
+                example: 0
+              o2:
+                type: integer
+                example: 21
+              blurb:
+                type: string
+                description: One-sentence kid-friendly description.
+        phaseToPlace:
+          type: object
+          description: Maps mission phase ID → lab place ID.
+          additionalProperties:
+            type: string
+          example:
+            iss: orbit
+            moon: moon
+            mars: mars
+        labMaterials:
+          type: array
+          description: Burnable materials available in the Flame Lab simulator.
+          items:
+            type: object
+            required: [id, name, loi, flam, color, kind]
+            properties:
+              id:
+                type: string
+                example: "nomex"
+              name:
+                type: string
+                example: "Fire-safe fabric"
+              loi:
+                type: integer
+                description: Limiting Oxygen Index.
+                example: 28
+              flam:
+                type: number
+                format: float
+                minimum: 0
+                maximum: 1
+                description: Normalized flammability score (0–1).
+                example: 0.6
+              color:
+                type: string
+                description: Hex color for 3D material rendering.
+                example: "#e6bf45"
+              kind:
+                type: string
+                enum: [solid, droplet]
+                description: Combustion geometry type.
+              fact:
+                type: string
+                description: Educational fact shown to the user.
+        lessons:
+          type: array
+          description: Ordered guided lesson stages for the Flame Lab.
+          items:
+            type: object
+            required: [title, text, setup, action]
+            properties:
+              title:
+                type: string
+              text:
+                type: string
+                description: Instructional text shown to the student.
+              setup:
+                type: object
+                description: Initial simulator state for this lesson.
+                properties:
+                  placeId:
+                    type: string
+                  materialId:
+                    type: string
+                  labels:
+                    type: boolean
+                  heatVision:
+                    type: boolean
+              action:
+                type: string
+                description: Suggested first action for the student.
+                example: "ignite"
+
+    # -----------------------------------------------------------------------
+    # Earth preset data
+    # -----------------------------------------------------------------------
+    EarthPresetsData:
+      type: object
+      required: [presets]
+      properties:
+        presets:
+          type: array
+          description: Named solar-storm scenario presets for the Earth Impact simulator.
+          items:
+            type: object
+            required: [id, name, level, hit, speed, bz, density]
+            properties:
+              id:
+                type: string
+                example: "gannon"
+              name:
+                type: string
+                example: "May 2024 storm"
+              level:
+                type: number
+                format: float
+                description: |
+                  Logarithmic flare intensity level
+                  (A=0, B=1, C=2, M=3, X=4; fractions represent sub-class).
+                example: 4.9
+              hit:
+                type: string
+                enum: [miss, glancing, direct]
+                description: CME impact geometry relative to Earth.
+              speed:
+                type: integer
+                description: CME propagation speed in km/s.
+                example: 1300
+              bz:
+                type: number
+                format: float
+                description: |
+                  Interplanetary magnetic field Bz component in nanoTesla.
+                  Negative values indicate southward IMF (geoeffective).
+                example: -45
+              density:
+                type: integer
+                description: Solar wind proton density in particles/cm³.
+                example: 35
+              blurb:
+                type: string
+                description: Human-readable description of this storm scenario.
+        cities:
+          type: array
+          description: Reference cities used for aurora visibility calculations.
+          items:
+            type: object
+            required: [name, lat]
+            properties:
+              name:
+                type: string
+                example: "New York"
+              lat:
+                type: number
+                format: float
+                description: Geographic latitude in decimal degrees.
+                example: 40.7
+
+    # -----------------------------------------------------------------------
+    # Source reference
+    # -----------------------------------------------------------------------
+    SourceRef:
+      type: object
+      description: NASA open-science data source cited by the application.
+      required: [id, name, use, url]
+      properties:
+        id:
+          type: string
+          description: Short identifier (PSI experiment code or NTRS citation number).
+          example: "PSI-26"
+        name:
+          type: string
+          description: Full experiment or publication name.
+          example: "Burning and Suppression of Solids (BASS)"
+        use:
+          type: string
+          description: How this source is used within TerraFusion/FlameAtlas.
+          example: "Solid material flame spread"
+        url:
+          type: string
+          format: uri
+          description: URL to the NASA source.
+          example: "https://psi.ndc.nasa.gov/"
